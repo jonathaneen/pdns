@@ -122,6 +122,7 @@ GSQLBackend::GSQLBackend(const string &mode, const string &suffix)
 
   d_SearchRecordsQuery = getArg("search-records-query");
   d_SearchCommentsQuery = getArg("search-comments-query");
+  d_GetSubZonesQuery = getArg("get-sub-zones-query");
 
   d_query_stmt = NULL;
   d_NoIdQuery_stmt = NULL;
@@ -182,6 +183,7 @@ GSQLBackend::GSQLBackend(const string &mode, const string &suffix)
   d_DeleteCommentsQuery_stmt = NULL;
   d_SearchRecordsQuery_stmt = NULL;
   d_SearchCommentsQuery_stmt = NULL;
+  d_GetSubZonesQuery_stmt = NULL;
 }
 
 void GSQLBackend::setNotified(uint32_t domain_id, uint32_t serial)
@@ -1796,6 +1798,38 @@ bool GSQLBackend::searchComments(const string &pattern, int maxResults, vector<C
   return false;
 }
 
+bool GSQLBackend::getSubZones(const string &pattern, vector<std::tuple<string, string>>& result)
+{
+  d_qname.clear();
+  string escaped_pattern = "%." +pattern2SQLPattern(pattern);
+  try {
+    reconnectIfNeeded();
+
+    d_GetSubZonesQuery_stmt->
+      bind("value", escaped_pattern)->
+      execute();
+
+    while(d_GetSubZonesQuery_stmt->hasNextRow())
+    {
+      SSqlStatement::row_t row;
+      std::tuple<string, string> z;
+      d_GetSubZonesQuery_stmt->nextRow(row);
+      ASSERT_ROW_COLUMNS("get-sub-zones-query", row, 2);
+      extractZoneReference(row, z);
+      result.push_back(z);
+    }
+
+    d_GetSubZonesQuery_stmt->reset();
+
+    return true;
+  }
+  catch (SSqlException &e) {
+    throw PDNSException("GSQLBackend unable to search for subzones with pattern '" + pattern + "' (escaped pattern '" + escaped_pattern + "'): "+e.txtReason());
+  }
+
+  return false;
+}
+
 void GSQLBackend::extractRecord(const SSqlStatement::row_t& row, DNSResourceRecord& r)
 {
   if (row[1].empty())
@@ -1834,6 +1868,11 @@ void GSQLBackend::extractComment(const SSqlStatement::row_t& row, Comment& comme
   comment.modified_at = pdns_stou(row[3]);
   comment.account = row[4];
   comment.content = row[5];
+}
+
+void GSQLBackend::extractZoneReference(const SSqlStatement::row_t& row, std::tuple<string, string>& reference)
+{
+  reference = std::tuple<string, string>{row[0], row[1]};
 }
 
 SSqlStatement::~SSqlStatement() { 

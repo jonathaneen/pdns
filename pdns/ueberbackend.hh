@@ -133,6 +133,7 @@ public:
   void reload();
   bool searchRecords(const string &pattern, int maxResults, vector<DNSResourceRecord>& result);
   bool searchComments(const string &pattern, int maxResults, vector<Comment>& result);
+  bool getSubZones(const string &pattern, vector<std::tuple<string, string>>& result);
 private:
   pthread_t d_tid;
   handle d_handle;
